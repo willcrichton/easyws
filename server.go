@@ -24,6 +24,10 @@ type msginfo struct {
 	data string
 }
 
+func (c *Connection) Send(message string) {
+	c.send <- message
+}
+
 func (c *Connection) reader() {
 	for {
 		var data string
