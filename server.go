@@ -74,9 +74,15 @@ func (h *Hub) run(handle func(string, *Connection, *Hub)) {
     }
 }
 
+func (h *Hub) Broadcast(message string) {
+	for conn, _ := range h.connections {
+		conn.Send(message)
+	}
+}
+
 func Socket(path string,
 	msgHandle func(string, *Connection, *Hub), 
-    joinHandle func(*Connection, *Hub)) {
+    joinHandle func(*Connection, *Hub)) *Hub {
 	h := &Hub{
 		receiver:    make(chan msginfo),
 		register:    make(chan *Connection),
@@ -88,5 +94,6 @@ func Socket(path string,
 	http.Handle(path, websocket.Handler(func(ws *websocket.Conn){
 		wsHandler(h, ws)
 	}))
+	return h
 }
 
