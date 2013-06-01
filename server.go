@@ -16,7 +16,7 @@ type Hub struct {
     receiver     chan msginfo
     register     chan *Connection
     unregister   chan *Connection
-	onjoin       func(*Connection, *Hub)
+	onjoin       func(*http.Request, *Connection, *Hub)
 }
 
 type msginfo struct {
@@ -51,9 +51,9 @@ func (c *Connection) writer() {
 	c.ws.Close()
 }
 
-func wsHandler(h *Hub, ws *websocket.Conn) {
+func wsHandler(r *http.Request, h *Hub, ws *websocket.Conn) {
 	c := &Connection{send: make(chan string, 256), ws: ws, h: h}
-	h.onjoin(c, h)
+	h.onjoin(r, c, h)
 	h.register <- c
 	defer func() { h.unregister <- c }()
 	go c.writer()
@@ -82,7 +82,7 @@ func (h *Hub) Broadcast(message string) {
 
 func Socket(path string,
 	msgHandle func(string, *Connection, *Hub), 
-    joinHandle func(*Connection, *Hub)) *Hub {
+    joinHandle func(*http.Request, *Connection, *Hub)) *Hub {
 	h := &Hub{
 		receiver:    make(chan msginfo),
 		register:    make(chan *Connection),
@@ -91,9 +91,12 @@ func Socket(path string,
 		onjoin:      joinHandle,
 	}
 	go h.run(msgHandle)
-	http.Handle(path, websocket.Handler(func(ws *websocket.Conn){
-		wsHandler(h, ws)
-	}))
+	f := func(w http.ResponseWriter, r *http.Request){
+		websocket.Handler(func(ws *websocket.Conn){
+			wsHandler(r, h, ws)
+		}).ServeHTTP(w, r)
+	}
+	http.Handle(path, http.HandlerFunc(f))
 	return h
 }
 
