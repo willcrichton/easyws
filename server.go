@@ -1,8 +1,8 @@
 package easyws
 
 import (
-	"net/http"
 	"code.google.com/p/go.net/websocket"
+	"net/http"
 )
 
 type Connection struct {
@@ -12,11 +12,12 @@ type Connection struct {
 }
 
 type Hub struct {
-    connections  map[*Connection]bool
-    receiver     chan msginfo
-    register     chan *Connection
-    unregister   chan *Connection
-	onjoin       func(*http.Request, *Connection, *Hub)
+	connections map[*Connection]bool
+	receiver    chan msginfo
+	register    chan *Connection
+	unregister  chan *Connection
+	onjoin      func(*http.Request, *Connection, *Hub)
+	onleave     func(*http.Request, *Connection, *Hub)
 }
 
 type msginfo struct {
@@ -55,23 +56,26 @@ func wsHandler(r *http.Request, h *Hub, ws *websocket.Conn) {
 	c := &Connection{send: make(chan string, 256), ws: ws, h: h}
 	h.onjoin(r, c, h)
 	h.register <- c
-	defer func() { h.unregister <- c }()
+	defer func() { 
+		h.onleave(r, c, h)
+		h.unregister <- c 
+	}()
 	go c.writer()
 	c.reader()
 }
 
 func (h *Hub) run(handle func(string, *Connection, *Hub)) {
-    for {
-        select {
-        case c := <-h.register:
-            h.connections[c] = true
-        case c := <-h.unregister:
-            delete(h.connections, c)
-            close(c.send)
-        case m := <-h.receiver:
+	for {
+		select {
+		case c := <-h.register:
+			h.connections[c] = true
+		case c := <-h.unregister:
+			delete(h.connections, c)
+			close(c.send)
+		case m := <-h.receiver:
 			handle(m.data, m.conn, h)
-        }
-    }
+		}
+	}
 }
 
 func (h *Hub) Broadcast(message string) {
@@ -81,22 +85,23 @@ func (h *Hub) Broadcast(message string) {
 }
 
 func Socket(path string,
-	msgHandle func(string, *Connection, *Hub), 
-    joinHandle func(*http.Request, *Connection, *Hub)) *Hub {
+	msgHandle func(string, *Connection, *Hub),
+	joinHandle func(*http.Request, *Connection, *Hub),
+	leaveHandle func(*http.Request, *Connection, *Hub)) *Hub {
 	h := &Hub{
 		receiver:    make(chan msginfo),
 		register:    make(chan *Connection),
 		unregister:  make(chan *Connection),
 		connections: make(map[*Connection]bool),
 		onjoin:      joinHandle,
+		onleave:     leaveHandle,
 	}
 	go h.run(msgHandle)
-	f := func(w http.ResponseWriter, r *http.Request){
-		websocket.Handler(func(ws *websocket.Conn){
+	f := func(w http.ResponseWriter, r *http.Request) {
+		websocket.Handler(func(ws *websocket.Conn) {
 			wsHandler(r, h, ws)
 		}).ServeHTTP(w, r)
 	}
 	http.Handle(path, http.HandlerFunc(f))
 	return h
 }
-

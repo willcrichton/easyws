@@ -6,9 +6,11 @@ Super-abstracted API for WebSockets in Go. A generalized, reusable form of the W
 ### The API
 
 The `easyws` package contains exactly one exported function: 
-`easyws.Socket(path string, msgHandle func(string, *Connection, *Hub), joinHandle func(*Connection, *Hub))`
+`easyws.Socket(path string, msgHandle func(string, *easyws.Connection, *Hub), 
+							joinHandle func(*http.Request, *easyws.Connection, *easyws.Hub)
+							leaveHandle func(*http.Request, *easyws.Connection, *easyws.Hub)`
 
-The Socket function creates a new WebSocket at the given path and accepts two handlers: `msgHandle` for when a message is sent to the WebSocket, and `joinHandle` for when a user connects to the WebSocket. Both handlers are called with the corresponding `Connection` and `Hub`. Those datatypes are as follows:
+The Socket function creates a new WebSocket at the given path and accepts three handlers: `msgHandle` for when a message is sent to the WebSocket, `joinHandle` for when a user connects to the WebSocket, and `leaveHandle` for when a user disconnects or the client otherwise closes his socket connection. Both handlers are called with the corresponding `Connection` and `Hub`. Those datatypes are as follows:
 
 ```go
 type Connection struct {
@@ -22,7 +24,8 @@ type Hub struct {
     receiver     chan msginfo
     register     chan *Connection
     unregister   chan *Connection
-    onjoin       func(*Connection, *Hub)
+    onjoin       func(*http.Request, *Connection, *Hub)
+    onleave      func(*http.Request, *Connection, *Hub)
 }
 ```
 
@@ -33,22 +36,28 @@ A `Connection` corresponds to a single connection on the WebSocket, and a `Hub` 
 Luckily, using `easyws` is, as the name implies, easy! Here's a short example:
 
 ```go
+package main
+
 import (
     "fmt"
     "log"
     "github.com/willcrichton/easyws"
 )
 
-func wsOnMessage(msg string, c *easyws.Connection, h *easyws.Hub){
+func wsOnMessage(msg string, c *easyws.Connection, h *easyws.Hub) {
     fmt.Println("Received message: " + msg)
 }
 
-func wsOnJoin(c *easyws.Connection, h *easyws.Hub){
+func wsOnJoin(r *http.Request, c *easyws.Connection, h *easyws.Hub) {
     fmt.Println("New user connected")
 }
 
+func wsOnLeave(r *http.Request, c *easyws.Connection, h *easyws.Hub) {
+	fmt.Println("User left websocket")
+}
+
 func main(){
-    easyws.Socket("/ws", wsOnMessage, wsOnJoin)
+    easyws.Socket("/ws", wsOnMessage, wsOnJoin, wsOnLeave)
     log.Fatal(http.ListenAndServe(":8080", nil))
 }
 ```
