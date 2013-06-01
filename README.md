@@ -6,9 +6,11 @@ Super-abstracted API for WebSockets in Go. A generalized, reusable form of the W
 ### The API
 
 The `easyws` package contains exactly one exported function: 
-`easyws.Socket(path string, msgHandle func(string, *easyws.Connection, *Hub), 
+```go
+easyws.Socket(path string, msgHandle func(string, *easyws.Connection, *Hub), 
 							joinHandle func(*http.Request, *easyws.Connection, *easyws.Hub)
-							leaveHandle func(*http.Request, *easyws.Connection, *easyws.Hub)`
+							leaveHandle func(*http.Request, *easyws.Connection, *easyws.Hub)
+```
 
 The Socket function creates a new WebSocket at the given path and accepts three handlers: `msgHandle` for when a message is sent to the WebSocket, `joinHandle` for when a user connects to the WebSocket, and `leaveHandle` for when a user disconnects or the client otherwise closes his socket connection. Both handlers are called with the corresponding `Connection` and `Hub`. Those datatypes are as follows:
 
